@@ -81,7 +81,12 @@ credential: "LKzYsr5xgYyDNhnj"
 ]
 };
 
-Upgrade your workspace to collaborate with your team. Pro workspaces also get 14-day log retention, horizontal autoscaling, and more.
+  function setStatus(message) { status.textContent = message; }
+  function setBusy(busy) {
+    sendBtn.disabled = busy;
+    viewBtn.disabled = busy;
+    stopBtn.disabled = !busy;
+  }
 
   function makePeer() {
     pc = new RTCPeerConnection(rtcConfig);
@@ -251,4 +256,4 @@ Upgrade your workspace to collaborate with your team. Pro workspaces also get 14
 })();
 </script>
 </body>
-</html>
+  </html>
