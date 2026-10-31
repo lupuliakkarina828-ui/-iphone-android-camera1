@@ -1,0 +1,12 @@
+{
+  "name": "iphone-android-camera",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Consent-based WebRTC camera streaming between iPhone and Android",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  }
+}
