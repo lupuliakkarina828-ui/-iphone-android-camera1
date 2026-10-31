@@ -57,10 +57,9 @@
   let pendingCandidates = [];
   let makingOffer = false;
 
- // STUN helps discover a route. For networks that block peer-to-peer,
+  // STUN helps discover a route. For networks that block peer-to-peer,
   // configure a TURN server here (see README.md).
   iphone-android-camera1 is live!
-  
   const rtcConfig = {
 iceServers: [
 { urls: "stun:stun.relay.metered.ca:80" },
@@ -81,6 +80,9 @@ credential: "LKzYsr5xgYyDNhnj"
 }
 ]
 };
+
+Upgrade your workspace to collaborate with your team. Pro workspaces also get 14-day log retention, horizontal autoscaling, and more.
+
   function makePeer() {
     pc = new RTCPeerConnection(rtcConfig);
 
