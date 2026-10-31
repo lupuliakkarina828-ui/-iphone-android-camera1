@@ -79,6 +79,14 @@ credential: "LKzYsr5xgYyDNhnj"
 }
 ]
 };
+  function makePeer() {
+    pc = new RTCPeerConnection(rtcConfig);
+
+    pc.onicecandidate = event => {
+      if (event.candidate && room) {
+        socket.emit("signal", { room, data: { candidate: event.candidate } });
+      }
+    };
 
     pc.ontrack = event => {
       video.srcObject = event.streams[0];
