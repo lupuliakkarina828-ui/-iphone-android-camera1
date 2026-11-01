@@ -4,14 +4,23 @@ const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: false },
-  maxHttpBufferSize: 1e6
-});
+const io = new Server(server, { maxHttpBufferSize: 1e6 });
 
 app.use(express.static("public", { extensions: ["html"] }));
 
-// Signaling only: video/audio media travels peer-to-peer when the networks allow it.
+// TURN credentials are stored in Render Environment, not in the GitHub file.
+app.get("/turn-credentials", (req, res) => {
+  const username = process.env.TURN_USERNAME;
+  const credential = process.env.TURN_CREDENTIAL;
+
+  if (!username || !credential) {
+    return res.status(503).json({ error: "TURN credentials are not configured on the server." });
+  }
+
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ username, credential });
+});
+
 const rooms = new Map();
 
 function validRoom(value) {
@@ -21,7 +30,7 @@ function validRoom(value) {
 io.on("connection", (socket) => {
   socket.on("join", ({ room, role } = {}, reply = () => {}) => {
     if (!validRoom(room) || !["sender", "viewer"].includes(role)) {
-      return reply({ ok: false, error: "Use a 4–32 character room code (letters/numbers)." });
+      return reply({ ok: false, error: "Код кімнати має містити 4–32 латинські літери, цифри, _ або -." });
     }
 
     let state = rooms.get(room);
@@ -31,7 +40,16 @@ io.on("connection", (socket) => {
     }
 
     if (state[role] && state[role] !== socket.id) {
-      return reply({ ok: false, error: `A ${role} is already in this room.` });
+      return reply({ ok: false, error: `У цій кімнаті вже є ${role === "sender" ? "передавач" : "глядач"}.` });
+    }
+
+    // If this socket was already in another room, clean it up first.
+    leaveRoom(socket);
+
+    state = rooms.get(room) || { sender: null, viewer: null };
+    rooms.set(room, state);
+    if (state[role] && state[role] !== socket.id) {
+      return reply({ ok: false, error: "Ця роль уже зайнята в кімнаті." });
     }
 
     state[role] = socket.id;
@@ -40,12 +58,8 @@ io.on("connection", (socket) => {
     socket.join(room);
     reply({ ok: true });
 
-    if (role === "viewer" && state.sender) {
-      io.to(state.sender).emit("viewer-ready");
-    }
-    if (role === "sender" && state.viewer) {
-      socket.emit("viewer-ready");
-    }
+    if (role === "viewer" && state.sender) io.to(state.sender).emit("viewer-ready");
+    if (role === "sender" && state.viewer) socket.emit("viewer-ready");
   });
 
   socket.on("signal", (message = {}) => {
@@ -62,8 +76,9 @@ io.on("connection", (socket) => {
 });
 
 function leaveRoom(socket) {
-  const { room, role } = socket.data;
+  const { room, role } = socket.data || {};
   if (!room || !role) return;
+
   const state = rooms.get(room);
   if (state && state[role] === socket.id) {
     state[role] = null;
@@ -71,6 +86,7 @@ function leaveRoom(socket) {
     if (peerId) io.to(peerId).emit("peer-left");
     if (!state.sender && !state.viewer) rooms.delete(room);
   }
+
   socket.leave(room);
   socket.data.room = null;
   socket.data.role = null;
