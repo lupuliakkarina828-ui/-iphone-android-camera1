@@ -25,13 +25,12 @@
 </head>
 <body>
   <h1>Camera Link</h1>
-  <p>Підключи два телефони через спільний код. Вони можуть бути в різних Wi‑Fi мережах.</p>
+  <p>iPhone передає відео та звук, Android автоматично підключається. Телефони можуть бути в різних Wi‑Fi мережах.</p>
 
   <div class="card">
-    <label for="room"><b>Спільний код кімнати</b></label>
-    <input id="room" autocomplete="off" minlength="4" maxlength="32" placeholder="Наприклад: MoyaKamera27">
-    <button id="sendBtn">Я передаю відео з цього телефона</button>
-    <button id="viewBtn" class="secondary">Я дивлюся відео з іншого телефона</button>
+    <button id="sendBtn">Увімкнути камеру та мікрофон на iPhone</button>
+    <button id="viewBtn" class="secondary">Підключитися до камери</button>
+    <button id="soundBtn" class="secondary hidden">Увімкнути звук</button>
     <button id="switchBtn" class="secondary hidden">Перемкнути передню / задню камеру</button>
     <button id="stopBtn" class="secondary" disabled>Зупинити / від'єднатися</button>
   </div>
@@ -39,19 +38,20 @@
   <div class="card">
     <video id="video" autoplay playsinline muted></video>
     <p id="status" role="status">Підключаємося до сервера…</p>
-    <p class="small">На телефоні, який передає відео, дозволь доступ до камери. Для перегляду на іншому телефоні введи той самий код кімнати.</p>
+    <p class="small">На iPhone дозволь доступ до камери й мікрофона. На Android, якщо звук не ввімкнеться автоматично, натисни «Увімкнути звук».</p>
   </div>
 
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const roomInput = $("room");
+  const ROOM = "CameraLinkKarina2026";
   const video = $("video");
   const status = $("status");
   const sendBtn = $("sendBtn");
   const viewBtn = $("viewBtn");
   const switchBtn = $("switchBtn");
   const stopBtn = $("stopBtn");
+  const soundBtn = $("soundBtn");
 
   const socket = io();
   let pc = null;
@@ -79,7 +79,7 @@
     stopBtn.disabled = !busy && !starting;
   }
 
-  socket.on("connect", () => setStatus("Є зв’язок із сервером. Введи код кімнати."));
+  socket.on("connect", () => setStatus("Є зв’язок із сервером. Очікуємо підключення…"));
   socket.on("connect_error", error => setStatus("Не вдалося підключитися до сервера: " + error.message));
   socket.on("disconnect", () => setStatus("Зв’язок із сервером втрачено. Перевір інтернет."));
 
@@ -118,22 +118,15 @@
   }
 
   async function joinRoom(selectedRole) {
-    const code = roomInput.value.trim();
-    if (!/^[A-Za-z0-9_-]{4,32}$/.test(code)) {
-      alert("Введи код із 4–32 латинських літер, цифр, _ або -.");
-      return false;
-    }
     await waitForSocket();
-    room = code;
+    room = ROOM;
     role = selectedRole;
-
     const result = await new Promise(resolve => {
       socket.timeout(10000).emit("join", { room, role }, (err, response) => {
         if (err) resolve({ ok: false, error: "Сервер не підтвердив вхід у кімнату." });
         else resolve(response);
       });
     });
-
     if (!result || !result.ok) {
       setStatus(result?.error || "Не вдалося увійти в кімнату.");
       room = null;
@@ -151,9 +144,12 @@
     };
     pc.ontrack = event => {
       video.srcObject = event.streams[0];
-      video.muted = true;
-      video.play().catch(() => {});
-      setStatus("Відео отримано. З’єднання активне.");
+      video.muted = false;
+      video.play().then(() => soundBtn.classList.add("hidden")).catch(() => {
+        soundBtn.classList.remove("hidden");
+        setStatus("Відео отримано. Натисни «Увімкнути звук», щоб почути мікрофон iPhone.");
+      });
+      setStatus("Відео та звук отримано. З’єднання активне.");
     };
     pc.onconnectionstatechange = () => {
       if (!pc) return;
@@ -177,14 +173,16 @@
       setStatus("Запитуємо доступ до камери…");
       localStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: facingMode } },
-        audio: false
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
       video.srcObject = localStream;
       video.muted = true;
       await loadTurnConfig();
       makePeer();
-      const track = localStream.getVideoTracks()[0];
-      videoSender = pc.addTrack(track, localStream);
+      localStream.getTracks().forEach(track => {
+        const sender = pc.addTrack(track, localStream);
+        if (track.kind === "video") videoSender = sender;
+      });
       if (!await joinRoom("sender")) throw new Error("Не вдалося увійти в кімнату.");
       switchBtn.classList.remove("hidden");
       setStatus("Камера ввімкнена. Очікуємо інший телефон у цій кімнаті…");
@@ -227,11 +225,11 @@
       });
       const newTrack = newStream.getVideoTracks()[0];
       await videoSender.replaceTrack(newTrack);
-      const oldStream = localStream;
-      localStream = newStream;
+      const oldTrack = localStream.getVideoTracks()[0];
+      if (oldTrack) { localStream.removeTrack(oldTrack); oldTrack.stop(); }
+      localStream.addTrack(newTrack);
       facingMode = nextMode;
-      video.srcObject = newStream;
-      oldStream.getTracks().forEach(track => track.stop());
+      video.srcObject = localStream;
       setStatus(facingMode === "environment" ? "Увімкнена задня камера." : "Увімкнена передня камера.");
     } catch (error) {
       setStatus("Не вдалося перемкнути камеру: " + error.message);
@@ -311,11 +309,22 @@
 
   sendBtn.addEventListener("click", startSender);
   viewBtn.addEventListener("click", startViewer);
+  soundBtn.addEventListener("click", async () => {
+    video.muted = false;
+    try { await video.play(); soundBtn.classList.add("hidden"); setStatus("Звук увімкнено."); }
+    catch (error) { setStatus("Не вдалося ввімкнути звук: " + error.message); }
+  });
   switchBtn.addEventListener("click", switchCamera);
   stopBtn.addEventListener("click", stop);
 
   if (!window.isSecureContext) {
     setStatus("Для доступу до камери відкрий сайт через HTTPS.");
+  } else if (/Android/i.test(navigator.userAgent)) {
+    // Android viewer attempts to join the fixed private room automatically.
+    const autoJoin = () => { if (!role && !starting) startViewer(); };
+    if (socket.connected) autoJoin(); else socket.once("connect", autoJoin);
+  } else if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    setStatus("На iPhone натисни «Увімкнути камеру та мікрофон» і дозволь доступ.");
   }
 })();
 </script>
