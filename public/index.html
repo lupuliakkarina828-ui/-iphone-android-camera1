@@ -1,245 +1,258 @@
 <!doctype html>
-<html lang="uk">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#111827">
-  <title>Camera Link</title>
-  <script src="/socket.io/socket.io.js"></script>
-  <style>
-    *{box-sizing:border-box} body{margin:0;padding:22px;background:#111827;color:#f9fafb;
-    font:16px system-ui,-apple-system,sans-serif;max-width:720px;margin-inline:auto}
-    h1{font-size:26px} p{color:#cbd5e1;line-height:1.5}
-    .card{background:#1f2937;border:1px solid #374151;border-radius:16px;padding:18px;margin:14px 0}
-    input,button{font:inherit;border-radius:10px;padding:13px;width:100%;margin:7px 0}
-    input{border:1px solid #64748b;background:#0f172a;color:white}
-    button{border:0;background:#2563eb;color:white;font-weight:650}
-    button.secondary{background:#475569} button:disabled{opacity:.5}
-    video{width:100%;max-height:65vh;background:#000;border-radius:12px}
-    #status{padding:12px;background:#0f172a;border-radius:10px;white-space:pre-wrap}
-    .small{font-size:13px;color:#94a3b8}
-  </style>
-</head>
-<body>
-  <h1>Camera Link</h1>
-  <p>Передача камери з iPhone на Android через WebRTC. Обидва телефони можуть бути в різних Wi‑Fi мережах.</p>
 
-  <div class="card">
-    <label for="room"><b>Спільний код кімнати</b></label>
-    <input id="room" autocomplete="off" minlength="4" maxlength="32"
-           placeholder="Наприклад: MoyaKamera27" value="">
-    <button id="sendBtn">Я передаю з iPhone</button>
-    <button id="viewBtn" class="secondary">Я дивлюся на Android</button>
-    <button id="stopBtn" class="secondary" disabled>Зупинити / від'єднатися</button>
-  </div>
+<html lang="uk">    
+<head>    
+  <meta charset="utf-8">    
+  <meta name="viewport" content="width=device-width,initial-scale=1">    
+  <meta name="theme-color" content="#111827">    
+  <title>Camera Link</title>    
+  <script src="/socket.io/socket.io.js"></script>    
+  <style>    
+    *{box-sizing:border-box} body{margin:0;padding:22px;background:#111827;color:#f9fafb;    
+    font:16px system-ui,-apple-system,sans-serif;max-width:720px;margin-inline:auto}    
+    h1{font-size:26px} p{color:#cbd5e1;line-height:1.5}    
+    .card{background:#1f2937;border:1px solid #374151;border-radius:16px;padding:18px;margin:14px 0}    
+    input,button{font:inherit;border-radius:10px;padding:13px;width:100%;margin:7px 0}    
+    input{border:1px solid #64748b;background:#0f172a;color:white}    
+    button{border:0;background:#2563eb;color:white;font-weight:650}    
+    button.secondary{background:#475569} button:disabled{opacity:.5}    
+    video{width:100%;max-height:65vh;background:#000;border-radius:12px}    
+    #status{padding:12px;background:#0f172a;border-radius:10px;white-space:pre-wrap}    
+    .small{font-size:13px;color:#94a3b8}    
+  </style>    
+</head>    
+<body>    
+  <h1>Camera Link</h1>    
+  <p>Передача камери з iPhone на Android через WebRTC. Обидва телефони можуть бути в різних Wi‑Fi мережах.</p>    <div class="card">    
+    <label for="room"><b>Спільний код кімнати</b></label>    
+    <input id="room" autocomplete="off" minlength="4" maxlength="32"    
+           placeholder="Наприклад: MoyaKamera27" value="">    
+    <button id="sendBtn">Я передаю з iPhone</button>    
+    <button id="viewBtn" class="secondary">Я дивлюся на Android</button>    
+    <button id="stopBtn" class="secondary" disabled>Зупинити / від'єднатися</button>    
+  </div>    <div class="card">    
+    <video id="video" autoplay playsinline muted></video>    
+    <p id="status" role="status">Не підключено.</p>    
+    <p class="small">На iPhone потрібно дозволити доступ до камери. Трансляцію видно лише учаснику, який знає код кімнати.</p>    
+  </div>  <script>    
+(() => {    
+  const $ = id => document.getElementById(id);    
+  const roomInput = $("room");    
+  const video = $("video");    
+  const status = $("status");    
+  const sendBtn = $("sendBtn");    
+  const viewBtn = $("viewBtn");    
+  const stopBtn = $("stopBtn");    const socket = io({ transports: ["websocket", "polling"] });
+let pc = null;
+let localStream = null;
+let role = null;
+let room = null;
+let pendingCandidates = [];
+let makingOffer = false;
 
-  <div class="card">
-    <video id="video" autoplay playsinline muted></video>
-    <p id="status" role="status">Не підключено.</p>
-    <p class="small">На iPhone потрібно дозволити доступ до камери. Трансляцію видно лише учаснику, який знає код кімнати.</p>
-  </div>
+// STUN and Turn configuration
+const rtcConfig = {
+iceServers: [
+{ urls: "stun:stun.relay.metered.ca:80" },
+{
+urls: "turn:global.relay.metered.ca:80",
+username: "7250909c897b9fa66f01844d",
+credential: "LKzYsr5xgYyDNhnj"
+},
+{
+urls: "turn:global.relay.metered.ca:80?transport=tcp",
+username: "7250909c897b9fa66f01844d",
+credential: "LKzYsr5xgYyDNhnj"
+},
+{
+urls: "turn:global.relay.metered.ca:443",
+username: "7250909c897b9fa66f01844d",
+credential: "LKzYsr5xgYyDNhnj"
+},
+{
+urls: "turns:global.relay.metered.ca:443?transport=tcp",
+username: "7250909c897b9fa66f01844d",
+credential: "LKzYsr5xgYyDNhnj"
+}
+]
+};
 
-<script>
-(() => {
-  const $ = id => document.getElementById(id);
-  const roomInput = $("room");
-  const video = $("video");
-  const status = $("status");
-  const sendBtn = $("sendBtn");
-  const viewBtn = $("viewBtn");
-  const stopBtn = $("stopBtn");
+function setStatus(message) { status.textContent = message; }
+function setBusy(busy) {
+sendBtn.disabled = busy;
+viewBtn.disabled = busy;
+stopBtn.disabled = !busy;
+}
 
-  const socket = io({ transports: ["websocket", "polling"] });
-  let pc = null;
-  let localStream = null;
-  let role = null;
-  let room = null;
-  let pendingCandidates = [];
-  let makingOffer = false;
+function makePeer() {
+pc = new RTCPeerConnection(rtcConfig);
 
-  // STUN helps discover a route. For networks that block peer-to-peer,
-  // configure a TURN server here (see README.md).
-  const rtcConfig = {
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" }
-      // Example TURN entry (replace with your own credentials):
-      // { urls: "turn:turn.example.com:3478", username: "USER", credential: "PASSWORD" }
-    ]
-  };
+pc.onicecandidate = event => {    
+  if (event.candidate && room) {    
+    socket.emit("signal", { room, data: { candidate: event.candidate } });    
+  }    
+};    
 
-  function setStatus(message) { status.textContent = message; }
-  function setBusy(busy) {
-    sendBtn.disabled = busy;
-    viewBtn.disabled = busy;
-    stopBtn.disabled = !busy;
-  }
+pc.ontrack = event => {    
+  video.srcObject = event.streams[0];    
+  video.muted = true;    
+  video.play().catch(() => {});    
+  setStatus("Відео отримано. З'єднання активне.");    
+};    
 
-  function makePeer() {
-    pc = new RTCPeerConnection(rtcConfig);
+pc.onconnectionstatechange = () => {    
+  if (!pc) return;    
+  setStatus("Стан з'єднання: " + pc.connectionState);    
+  if (pc.connectionState === "failed") {    
+    setStatus("Не вдалося з'єднатися. Спробуйте налаштувати TURN-сервер (див. README).");    
+  }    
+};    
 
-    pc.onicecandidate = event => {
-      if (event.candidate && room) {
-        socket.emit("signal", { room, data: { candidate: event.candidate } });
-      }
-    };
+pc.oniceconnectionstatechange = () => {    
+  if (pc && ["connected", "completed"].includes(pc.iceConnectionState)) {    
+    setStatus("Захищене WebRTC-з'єднання встановлено.");    
+  }    
+};
 
-    pc.ontrack = event => {
-      video.srcObject = event.streams[0];
-      video.muted = true;
-      video.play().catch(() => {});
-      setStatus("Відео отримано. З'єднання активне.");
-    };
+}
 
-    pc.onconnectionstatechange = () => {
-      if (!pc) return;
-      setStatus("Стан з'єднання: " + pc.connectionState);
-      if (pc.connectionState === "failed") {
-        setStatus("Не вдалося з'єднатися. Спробуйте налаштувати TURN-сервер (див. README).");
-      }
-    };
+async function joinRoom(selectedRole) {
+const code = roomInput.value.trim();
+if (!/^[A-Za-z0-9_-]{4,32}$/.test(code)) {
+alert("Введіть код із 4–32 латинських літер, цифр, _ або -.");
+return false;
+}
+if (!socket.connected) {
+setStatus("Немає з'єднання із сервером. Перевірте інтернет і спробуйте ще раз.");
+return false;
+}
 
-    pc.oniceconnectionstatechange = () => {
-      if (pc && ["connected", "completed"].includes(pc.iceConnectionState)) {
-        setStatus("Захищене WebRTC-з'єднання встановлено.");
-      }
-    };
-  }
+room = code;    
+role = selectedRole;    
 
-  async function joinRoom(selectedRole) {
-    const code = roomInput.value.trim();
-    if (!/^[A-Za-z0-9_-]{4,32}$/.test(code)) {
-      alert("Введіть код із 4–32 латинських літер, цифр, _ або -.");
-      return false;
-    }
-    if (!socket.connected) {
-      setStatus("Немає з'єднання із сервером. Перевірте інтернет і спробуйте ще раз.");
-      return false;
-    }
+const result = await new Promise(resolve => {    
+  socket.emit("join", { room, role }, resolve);    
+});    
+if (!result || !result.ok) {    
+  setStatus(result?.error || "Не вдалося увійти в кімнату.");    
+  room = null; role = null;    
+  return false;    
+}    
+setBusy(true);    
+return true;
 
-    room = code;
-    role = selectedRole;
+}
 
-    const result = await new Promise(resolve => {
-      socket.emit("join", { room, role }, resolve);
-    });
-    if (!result || !result.ok) {
-      setStatus(result?.error || "Не вдалося увійти в кімнату.");
-      room = null; role = null;
-      return false;
-    }
-    setBusy(true);
-    return true;
-  }
+async function startSender() {
+try {
+if (!await joinRoom("sender")) return;
+// Camera permission is requested only after the user presses this button.
+localStream = await navigator.mediaDevices.getUserMedia({
+video: { facingMode: { ideal: "environment" } },
+audio: false
+});
+video.srcObject = localStream;
+video.muted = true;
+makePeer();
+localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+setStatus("Камера ввімкнена. Очікуємо Android у цій кімнаті…");
+} catch (error) {
+setStatus("Не вдалося запустити камеру: " + error.message);
+await stop();
+}
+}
 
-  async function startSender() {
-    try {
-      if (!await joinRoom("sender")) return;
-      // Camera permission is requested only after the user presses this button.
-      localStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false
-      });
-      video.srcObject = localStream;
-      video.muted = true;
-      makePeer();
-      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-      setStatus("Камера ввімкнена. Очікуємо Android у цій кімнаті…");
-    } catch (error) {
-      setStatus("Не вдалося запустити камеру: " + error.message);
-      await stop();
-    }
-  }
+async function startViewer() {
+try {
+if (!await joinRoom("viewer")) return;
+makePeer();
+setStatus("Очікуємо відео з iPhone…");
+} catch (error) {
+setStatus("Помилка: " + error.message);
+await stop();
+}
+}
 
-  async function startViewer() {
-    try {
-      if (!await joinRoom("viewer")) return;
-      makePeer();
-      setStatus("Очікуємо відео з iPhone…");
-    } catch (error) {
-      setStatus("Помилка: " + error.message);
-      await stop();
-    }
-  }
+async function flushCandidates() {
+if (!pc || !pc.remoteDescription) return;
+const queued = pendingCandidates;
+pendingCandidates = [];
+for (const candidate of queued) {
+try { await pc.addIceCandidate(candidate); }
+catch (e) { console.warn("ICE candidate skipped", e); }
+}
+}
 
-  async function flushCandidates() {
-    if (!pc || !pc.remoteDescription) return;
-    const queued = pendingCandidates;
-    pendingCandidates = [];
-    for (const candidate of queued) {
-      try { await pc.addIceCandidate(candidate); }
-      catch (e) { console.warn("ICE candidate skipped", e); }
-    }
-  }
+socket.on("viewer-ready", async () => {
+if (role !== "sender" || !pc) return;
+try {
+makingOffer = true;
+const offer = await pc.createOffer();
+await pc.setLocalDescription(offer);
+socket.emit("signal", { room, data: { description: pc.localDescription } });
+setStatus("Пропозицію з'єднання надіслано. Очікуємо Android…");
+} catch (error) {
+setStatus("Помилка створення з'єднання: " + error.message);
+} finally {
+makingOffer = false;
+}
+});
 
-  socket.on("viewer-ready", async () => {
-    if (role !== "sender" || !pc) return;
-    try {
-      makingOffer = true;
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit("signal", { room, data: { description: pc.localDescription } });
-      setStatus("Пропозицію з'єднання надіслано. Очікуємо Android…");
-    } catch (error) {
-      setStatus("Помилка створення з'єднання: " + error.message);
-    } finally {
-      makingOffer = false;
-    }
-  });
+socket.on("signal", async data => {
+if (!pc || !data) return;
+try {
+if (data.description) {
+await pc.setRemoteDescription(data.description);
+await flushCandidates();
 
-  socket.on("signal", async data => {
-    if (!pc || !data) return;
-    try {
-      if (data.description) {
-        await pc.setRemoteDescription(data.description);
-        await flushCandidates();
+if (data.description.type === "offer") {    
+      const answer = await pc.createAnswer();    
+      await pc.setLocalDescription(answer);    
+      socket.emit("signal", { room, data: { description: pc.localDescription } });    
+      setStatus("Відповідь надіслана. Встановлюємо відеоз'єднання…");    
+    } else if (data.description.type === "answer") {    
+      setStatus("Відповідь отримана. Встановлюємо відеоз'єднання…");    
+    }    
+  }    
+  if (data.candidate) {    
+    if (pc.remoteDescription) {    
+      await pc.addIceCandidate(data.candidate);    
+    } else {    
+      pendingCandidates.push(data.candidate);    
+    }    
+  }    
+} catch (error) {    
+  console.error(error);    
+  setStatus("Помилка WebRTC: " + error.message);    
+}
 
-        if (data.description.type === "offer") {
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          socket.emit("signal", { room, data: { description: pc.localDescription } });
-          setStatus("Відповідь надіслана. Встановлюємо відеоз'єднання…");
-        } else if (data.description.type === "answer") {
-          setStatus("Відповідь отримана. Встановлюємо відеоз'єднання…");
-        }
-      }
-      if (data.candidate) {
-        if (pc.remoteDescription) {
-          await pc.addIceCandidate(data.candidate);
-        } else {
-          pendingCandidates.push(data.candidate);
-        }
-      }
-    } catch (error) {
-      console.error(error);
-      setStatus("Помилка WebRTC: " + error.message);
-    }
-  });
+});
 
-  socket.on("peer-left", () => setStatus("Інший телефон від'єднався."));
-  socket.on("disconnect", () => setStatus("Втрачено зв'язок із сервером сигналізації."));
+socket.on("peer-left", () => setStatus("Інший телефон від'єднався."));
+socket.on("disconnect", () => setStatus("Втрачено зв'язок із сервером сигналізації."));
 
-  async function stop() {
-    if (room) socket.emit("leave");
-    if (pc) { pc.ontrack = null; pc.close(); pc = null; }
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
-      localStream = null;
-    }
-    video.srcObject = null;
-    pendingCandidates = [];
-    room = null; role = null;
-    setBusy(false);
-    setStatus("Від'єднано.");
-  }
+async function stop() {
+if (room) socket.emit("leave");
+if (pc) { pc.ontrack = null; pc.close(); pc = null; }
+if (localStream) {
+localStream.getTracks().forEach(track => track.stop());
+localStream = null;
+}
+video.srcObject = null;
+pendingCandidates = [];
+room = null; role = null;
+setBusy(false);
+setStatus("Від'єднано.");
+}
 
-  sendBtn.addEventListener("click", startSender);
-  viewBtn.addEventListener("click", startViewer);
-  stopBtn.addEventListener("click", stop);
-  window.addEventListener("beforeunload", () => {
-    if (localStream) localStream.getTracks().forEach(track => track.stop());
-    if (pc) pc.close();
-  });
+sendBtn.addEventListener("click", startSender);
+viewBtn.addEventListener("click", startViewer);
+stopBtn.addEventListener("click", stop);
+window.addEventListener("beforeunload", () => {
+if (localStream) localStream.getTracks().forEach(track => track.stop());
+if (pc) pc.close();
+});
 })();
-</script>
-</body>
+</script>  </body>
+
 </html>
