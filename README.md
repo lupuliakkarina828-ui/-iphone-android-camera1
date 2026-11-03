@@ -1,20 +1,30 @@
-# Camera Link
+# Camera Link — кілька телефонів
 
-A small WebRTC camera streaming site. The iPhone sender transmits camera video and microphone audio; an Android browser automatically attempts to join as viewer.
+## Що нового
+- Android відкриває список камер, зареєстрованих на сервері.
+- Можна додати будь-який телефон як камеру, задати назву, вибрати для перегляду, перейменувати або видалити.
+- Відео та звук передаються через WebRTC.
+- Доступ до списку та сигналізації захищений спільним PIN-кодом.
 
-## Render setup
-- Build command: `npm install`
-- Start command: `npm start`
-- Environment variables: `TURN_USERNAME` and `TURN_CREDENTIAL`
+## Налаштування Render
+Потрібні змінні Environment:
+- `TURN_USERNAME` — наявний TURN username
+- `TURN_CREDENTIAL` — наявний TURN credential
+- `CAMERA_PIN` — новий PIN не менше 6 символів (не надсилати його в чат)
 
-Keep TURN credentials in Render Environment, not in GitHub.
+Також потрібна PostgreSQL база даних у Render:
+1. Створи PostgreSQL instance у Render.
+2. Скопіюй Internal Database URL.
+3. Додай у Web Service Environment змінну `DATABASE_URL` з цим URL.
+4. Збережи зміни й дочекайся успішного Deploy.
 
-## Use
-1. Deploy this project to Render over HTTPS.
-2. Open the site on iPhone and tap **Увімкнути камеру та мікрофон**. Allow camera and microphone access.
-3. Open the same site on Android. It automatically attempts to join as viewer.
-4. If Android does not play audio automatically, tap **Увімкнути звук**.
+Схема таблиці створюється автоматично при старті сервера.
 
-The two roles use one fixed room name in the client so the user does not have to type a room code. This is convenient but is not private authentication: anyone who knows the public site and room name could potentially attempt to join. Do not use this for sensitive/private monitoring. For private access, add a login or a random pairing secret.
-
-The iPhone browser must remain open in the foreground with the screen awake. iOS may pause camera/microphone streaming when the page is backgrounded or the phone is locked.
+## Важливо
+- Не видаляй старий сервіс, доки новий не перевірений.
+- Кожен телефон, який буде камерою, має самостійно відкрити сайт, ввести PIN, надати дозвіл на камеру/мікрофон і натиснути «Увімкнути камеру та мікрофон».
+- На iPhone Safari має залишатися відкритим, а екран — увімкненим.
+- Одна камера може мати одного активного глядача за раз.
+- Список зберігається в PostgreSQL навіть після очищення історії браузера. Ідентифікатор камери зберігається на самому телефоні; якщо очистити дані сайту на телефоні-камері, її потрібно буде зареєструвати повторно.
+- Це спільний PIN для доступу. Для використання з іншими людьми потрібні окремі облікові записи та контроль доступу; не публікуй PIN.
+- 
