@@ -1,331 +1,188 @@
 <!doctype html>
 <html lang="uk">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#111827">
-  <title>Camera Link</title>
-  <script src="/socket.io/socket.io.js"></script>
-  <style>
-    *{box-sizing:border-box}
-    body{margin:0;padding:22px;background:#111827;color:#f9fafb;font:16px system-ui,-apple-system,sans-serif;max-width:720px;margin-inline:auto}
-    h1{font-size:27px;margin-bottom:8px}
-    p{color:#cbd5e1;line-height:1.5}
-    .card{background:#1f2937;border:1px solid #374151;border-radius:16px;padding:18px;margin:14px 0}
-    input,button{font:inherit;border-radius:10px;padding:13px;width:100%;margin:7px 0}
-    input{border:1px solid #64748b;background:#0f172a;color:white}
-    button{border:0;background:#2563eb;color:white;font-weight:650}
-    button.secondary{background:#475569}
-    button:disabled{opacity:.48}
-    video{width:100%;max-height:65vh;background:#000;border-radius:12px;object-fit:contain}
-    #status{padding:12px;background:#0f172a;border-radius:10px;white-space:pre-wrap}
-    .small{font-size:13px;color:#94a3b8}
-    .hidden{display:none}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111827">
+<title>Camera Link</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:20px;background:#111827;color:#f9fafb;font:16px system-ui,-apple-system,sans-serif;max-width:720px;margin-inline:auto}
+h1{font-size:27px;margin:4px 0 8px}.muted{color:#cbd5e1;line-height:1.5}.card{background:#1f2937;border:1px solid #374151;border-radius:16px;padding:16px;margin:14px 0}
+input,button{font:inherit;border-radius:10px;padding:13px;width:100%;margin:6px 0}input{border:1px solid #64748b;background:#0f172a;color:white}
+button{border:0;background:#2563eb;color:white;font-weight:650}button.secondary{background:#475569}button.danger{background:#991b1b}button:disabled{opacity:.45}
+video{width:100%;max-height:62vh;background:#000;border-radius:12px;object-fit:contain}#status{padding:12px;background:#0f172a;border-radius:10px;white-space:pre-wrap}
+.small{font-size:13px;color:#94a3b8}.hidden{display:none!important}.device{padding:12px;border:1px solid #475569;border-radius:12px;margin:9px 0}.device strong{display:block}.device button{margin-top:8px}.row{display:flex;gap:8px}.row button{flex:1}
+</style>
 </head>
 <body>
-  <h1>Camera Link</h1>
-  <p>iPhone передає відео та звук, Android автоматично підключається. Телефони можуть бути в різних Wi‑Fi мережах.</p>
+<h1>Camera Link</h1>
+<p class="muted">Підключайся з Android до різних телефонів, які добровільно увімкнули камеру та мікрофон.</p>
 
-  <div class="card">
-    <button id="sendBtn">Увімкнути камеру та мікрофон на iPhone</button>
-    <button id="viewBtn" class="secondary">Підключитися до камери</button>
-    <button id="soundBtn" class="secondary hidden">Увімкнути звук</button>
-    <button id="switchBtn" class="secondary hidden">Перемкнути передню / задню камеру</button>
-    <button id="stopBtn" class="secondary" disabled>Зупинити / від'єднатися</button>
-  </div>
+<section class="card" id="pinCard">
+  <label for="pin"><b>Особистий PIN-код</b></label>
+  <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Введи PIN-код із Render">
+  <button id="unlockBtn">Увійти</button>
+  <p class="small">PIN має збігатися з CAMERA_PIN у налаштуваннях Render.</p>
+</section>
 
-  <div class="card">
-    <video id="video" autoplay playsinline muted></video>
-    <p id="status" role="status">Підключаємося до сервера…</p>
-    <p class="small">На iPhone дозволь доступ до камери й мікрофона. На Android, якщо звук не ввімкнеться автоматично, натисни «Увімкнути звук».</p>
-  </div>
+<section class="card hidden" id="mainCard">
+  <p><b>Що хочеш зробити?</b></p>
+  <button id="cameraMode">Цей телефон буде камерою</button>
+  <button id="viewerMode" class="secondary">Вибрати телефон для перегляду</button>
+  <button id="lockBtn" class="secondary">Вийти / заблокувати список</button>
+</section>
+
+<section class="card hidden" id="registerCard">
+  <b>Додати цей телефон як камеру</b>
+  <input id="deviceName" maxlength="40" placeholder="Назва, наприклад iPhone 13">
+  <button id="startCameraBtn">Увімкнути камеру та мікрофон</button>
+  <button id="backFromRegister" class="secondary">Назад</button>
+</section>
+
+<section class="card hidden" id="listCard">
+  <b>Збережені телефони</b>
+  <div id="deviceList"><p class="small">Завантажуємо список…</p></div>
+  <button id="refreshBtn" class="secondary">Оновити список</button>
+  <button id="backFromList" class="secondary">Назад</button>
+</section>
+
+<section class="card hidden" id="callCard">
+  <b id="callTitle">Підключення</b>
+  <video id="video" autoplay playsinline muted></video>
+  <button id="soundBtn" class="secondary hidden">Увімкнути звук</button>
+  <button id="switchBtn" class="secondary hidden">Перемкнути передню / задню камеру</button>
+  <button id="stopBtn" class="danger">Зупинити / від'єднатися</button>
+</section>
+<p id="status" role="status">Введи PIN-код, щоб почати.</p>
+<p class="small">Для роботи камера має бути відкрита на телефоні-передавачі. На iPhone сторінка повинна залишатися відкритою, а екран — увімкненим.</p>
 
 <script>
 (() => {
-  const $ = id => document.getElementById(id);
-  const ROOM = "CameraLinkKarina2026";
-  const video = $("video");
-  const status = $("status");
-  const sendBtn = $("sendBtn");
-  const viewBtn = $("viewBtn");
-  const switchBtn = $("switchBtn");
-  const stopBtn = $("stopBtn");
-  const soundBtn = $("soundBtn");
-
-  const socket = io();
-  let pc = null;
-  let localStream = null;
-  let role = null;
-  let room = null;
-  let pendingCandidates = [];
-  let makingOffer = false;
-  let facingMode = "environment";
-  let videoSender = null;
-  let starting = false;
-
-  let rtcConfig = {
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" }
-    ],
-    iceCandidatePoolSize: 4
-  };
-
-  function setStatus(message) { status.textContent = message; }
-
-  function setBusy(busy) {
-    sendBtn.disabled = busy || starting;
-    viewBtn.disabled = busy || starting;
-    stopBtn.disabled = !busy && !starting;
-  }
-
-  socket.on("connect", () => setStatus("Є зв’язок із сервером. Очікуємо підключення…"));
-  socket.on("connect_error", error => setStatus("Не вдалося підключитися до сервера: " + error.message));
-  socket.on("disconnect", () => setStatus("Зв’язок із сервером втрачено. Перевір інтернет."));
-
-  async function loadTurnConfig() {
-    try {
-      const response = await fetch("/turn-credentials", { cache: "no-store" });
-      if (!response.ok) throw new Error("TURN не налаштований у Render Environment.");
-      const creds = await response.json();
-      rtcConfig.iceServers.push(
-        { urls: "turn:global.relay.metered.ca:80", username: creds.username, credential: creds.credential },
-        { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: creds.username, credential: creds.credential },
-        { urls: "turn:global.relay.metered.ca:443", username: creds.username, credential: creds.credential },
-        { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: creds.username, credential: creds.credential }
-      );
-      return true;
-    } catch (error) {
-      setStatus("Увага: " + error.message + " Поки що пробуємо пряме WebRTC-з’єднання.");
-      return false;
-    }
-  }
-
-  async function waitForSocket() {
-    if (socket.connected) return;
-    setStatus("Підключаємося до сервера…");
-    await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        socket.off("connect", onConnect);
-        reject(new Error("Сервер не відповідає. Онови сторінку й спробуй ще раз."));
-      }, 12000);
-      function onConnect() {
-        clearTimeout(timer);
-        resolve();
-      }
-      socket.once("connect", onConnect);
-    });
-  }
-
-  async function joinRoom(selectedRole) {
-    await waitForSocket();
-    room = ROOM;
-    role = selectedRole;
-    const result = await new Promise(resolve => {
-      socket.timeout(10000).emit("join", { room, role }, (err, response) => {
-        if (err) resolve({ ok: false, error: "Сервер не підтвердив вхід у кімнату." });
-        else resolve(response);
-      });
-    });
-    if (!result || !result.ok) {
-      setStatus(result?.error || "Не вдалося увійти в кімнату.");
-      room = null;
-      role = null;
-      return false;
-    }
-    setBusy(true);
-    return true;
-  }
-
-  function makePeer() {
-    pc = new RTCPeerConnection(rtcConfig);
-    pc.onicecandidate = event => {
-      if (event.candidate && room) socket.emit("signal", { room, data: { candidate: event.candidate } });
-    };
-    pc.ontrack = event => {
-      video.srcObject = event.streams[0];
-      video.muted = false;
-      video.play().then(() => soundBtn.classList.add("hidden")).catch(() => {
-        soundBtn.classList.remove("hidden");
-        setStatus("Відео отримано. Натисни «Увімкнути звук», щоб почути мікрофон iPhone.");
-      });
-      setStatus("Відео та звук отримано. З’єднання активне.");
-    };
-    pc.onconnectionstatechange = () => {
-      if (!pc) return;
-      if (pc.connectionState === "connected") setStatus("З’єднання активне. Відео передається.");
-      else if (pc.connectionState === "failed") setStatus("Не вдалося з’єднати телефони. Перевір TURN-дані в Render.");
-      else if (pc.connectionState === "disconnected") setStatus("Зв’язок перервався. Очікуємо відновлення…");
-    };
-    pc.oniceconnectionstatechange = () => {
-      if (pc && ["connected", "completed"].includes(pc.iceConnectionState)) {
-        setStatus("Захищене WebRTC-з’єднання встановлено.");
-      }
-    };
-  }
-
-  async function startSender() {
-    if (starting) return;
-    starting = true;
-    setBusy(false);
-    try {
-      await waitForSocket();
-      setStatus("Запитуємо доступ до камери…");
-      localStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facingMode } },
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-      });
-      video.srcObject = localStream;
-      video.muted = true;
-      await loadTurnConfig();
-      makePeer();
-      localStream.getTracks().forEach(track => {
-        const sender = pc.addTrack(track, localStream);
-        if (track.kind === "video") videoSender = sender;
-      });
-      if (!await joinRoom("sender")) throw new Error("Не вдалося увійти в кімнату.");
-      switchBtn.classList.remove("hidden");
-      setStatus("Камера ввімкнена. Очікуємо інший телефон у цій кімнаті…");
-    } catch (error) {
-      setStatus("Не вдалося запустити передачу: " + error.message);
-      await stop();
-    } finally {
-      starting = false;
-      setBusy(Boolean(role));
-    }
-  }
-
-  async function startViewer() {
-    if (starting) return;
-    starting = true;
-    setBusy(false);
-    try {
-      await waitForSocket();
-      await loadTurnConfig();
-      makePeer();
-      if (!await joinRoom("viewer")) throw new Error("Не вдалося увійти в кімнату.");
-      setStatus("Очікуємо відео з іншого телефона…");
-    } catch (error) {
-      setStatus("Не вдалося підключитися: " + error.message);
-      await stop();
-    } finally {
-      starting = false;
-      setBusy(Boolean(role));
-    }
-  }
-
-  async function switchCamera() {
-    if (role !== "sender" || !pc || !videoSender || !localStream) return;
-    switchBtn.disabled = true;
-    const nextMode = facingMode === "environment" ? "user" : "environment";
-    try {
-      const newStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: nextMode } },
-        audio: false
-      });
-      const newTrack = newStream.getVideoTracks()[0];
-      await videoSender.replaceTrack(newTrack);
-      const oldTrack = localStream.getVideoTracks()[0];
-      if (oldTrack) { localStream.removeTrack(oldTrack); oldTrack.stop(); }
-      localStream.addTrack(newTrack);
-      facingMode = nextMode;
-      video.srcObject = localStream;
-      setStatus(facingMode === "environment" ? "Увімкнена задня камера." : "Увімкнена передня камера.");
-    } catch (error) {
-      setStatus("Не вдалося перемкнути камеру: " + error.message);
-    } finally {
-      switchBtn.disabled = false;
-    }
-  }
-
-  async function flushCandidates() {
-    if (!pc || !pc.remoteDescription) return;
-    const queued = pendingCandidates;
-    pendingCandidates = [];
-    for (const candidate of queued) {
-      try { await pc.addIceCandidate(candidate); }
-      catch (error) { console.warn("ICE candidate skipped", error); }
-    }
-  }
-
-  socket.on("viewer-ready", async () => {
-    if (role !== "sender" || !pc) return;
-    try {
-      makingOffer = true;
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit("signal", { room, data: { description: pc.localDescription } });
-      setStatus("Запит на відеоз’єднання надіслано…");
-    } catch (error) {
-      setStatus("Помилка створення з’єднання: " + error.message);
-    } finally {
-      makingOffer = false;
-    }
+const $ = id => document.getElementById(id);
+const socket = io();
+const pinInput=$("pin"), pinCard=$("pinCard"), mainCard=$("mainCard"), registerCard=$("registerCard"), listCard=$("listCard"), callCard=$("callCard");
+const video=$("video"), status=$("status");
+let pin="", pc=null, stream=null, role=null, currentRoom=null, currentDevice=null, pending=[], videoSender=null, facing="environment";
+let devices=[];
+const localDeviceKey="cameraLinkDeviceIdV2";
+function say(s){status.textContent=s}
+function show(section){[pinCard,mainCard,registerCard,listCard,callCard].forEach(x=>x.classList.add("hidden")); if(section)section.classList.remove("hidden")}
+async function api(path, method="GET", body) {
+ const res=await fetch(path,{method,headers:{"Content-Type":"application/json","x-camera-pin":pin},body:body?JSON.stringify(body):undefined});
+ const data=await res.json().catch(()=>({}));
+ if(!res.ok) throw new Error(data.error||"Помилка сервера");
+ return data;
+}
+async function loadDevices(){
+ try{
+  const data=await api("/api/devices"); devices=data.devices||[];
+  const host=$("deviceList"); host.innerHTML="";
+  if(!devices.length){host.innerHTML='<p class="small">Поки немає збережених телефонів. Відкрий Camera Link на телефоні, який буде камерою, і додай його.</p>';return;}
+  devices.forEach(d=>{
+   const item=document.createElement("div");item.className="device";
+   const title=document.createElement("strong");title.textContent=d.name;
+   const date=document.createElement("div");date.className="small";date.textContent="Остання реєстрація: "+new Date(d.last_seen).toLocaleString();
+   const connect=document.createElement("button");connect.textContent="Підключитися";connect.onclick=()=>startViewer(d);
+   const rename=document.createElement("button");rename.textContent="Перейменувати";rename.className="secondary";rename.onclick=async()=>{const n=prompt("Нова назва телефона:",d.name);if(n&&n.trim()){try{await api("/api/devices/"+encodeURIComponent(d.id),"PATCH",{name:n.trim()});await loadDevices()}catch(e){say(e.message)}}};
+   const del=document.createElement("button");del.textContent="Видалити зі списку";del.className="danger";del.onclick=async()=>{if(confirm("Видалити "+d.name+" зі списку?")){try{await api("/api/devices/"+encodeURIComponent(d.id),"DELETE");await loadDevices()}catch(e){say(e.message)}}};
+   item.append(title,date,connect,rename,del);host.append(item);
   });
+ }catch(e){say(e.message);$("deviceList").innerHTML='<p class="small">Не вдалося завантажити список. Перевір налаштування бази даних Render.</p>'}
+}
+$("unlockBtn").onclick=async()=>{
+ pin=pinInput.value.trim(); if(!pin){say("Введи PIN-код.");return}
+ try{await api("/api/devices");show(mainCard);say("Доступ дозволено.");}
+ catch(e){pin="";say(e.message)}
+};
+$("lockBtn").onclick=()=>{pin="";pinInput.value="";show(pinCard);say("Список заблоковано.")};
+$("cameraMode").onclick=()=>{show(registerCard);$("deviceName").value=localStorage.getItem("cameraLinkDeviceName")||""};
+$("viewerMode").onclick=async()=>{show(listCard);await loadDevices()};
+$("refreshBtn").onclick=loadDevices;
+$("backFromRegister").onclick=()=>show(mainCard);
+$("backFromList").onclick=()=>show(mainCard);
 
-  socket.on("signal", async data => {
-    if (!pc || !data) return;
-    try {
-      if (data.description) {
-        await pc.setRemoteDescription(data.description);
-        await flushCandidates();
-        if (data.description.type === "offer") {
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          socket.emit("signal", { room, data: { description: pc.localDescription } });
-          setStatus("Відповідь надіслана. Встановлюємо відеоз’єднання…");
-        } else if (data.description.type === "answer") {
-          setStatus("Відповідь отримана. Встановлюємо відеоз’єднання…");
-        }
-      }
-      if (data.candidate) {
-        if (pc.remoteDescription) await pc.addIceCandidate(data.candidate);
-        else pendingCandidates.push(data.candidate);
-      }
-    } catch (error) {
-      console.error(error);
-      setStatus("Помилка WebRTC: " + error.message);
-    }
-  });
-
-  socket.on("peer-left", () => setStatus("Інший телефон від’єднався."));
-
-  async function stop() {
-    if (room) socket.emit("leave");
-    if (pc) { pc.ontrack = null; pc.close(); pc = null; }
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
-      localStream = null;
-    }
-    videoSender = null;
-    video.srcObject = null;
-    pendingCandidates = [];
-    room = null;
-    role = null;
-    switchBtn.classList.add("hidden");
-    setBusy(false);
-    setStatus("Від’єднано.");
+async function turnConfig(){
+ const ice={iceServers:[{urls:"stun:stun.l.google.com:19302"}],iceCandidatePoolSize:4};
+ try{const r=await fetch("/turn-credentials",{cache:"no-store"});if(!r.ok)throw Error();const c=await r.json();
+ ice.iceServers.push(
+ {urls:"turn:global.relay.metered.ca:80",username:c.username,credential:c.credential},
+ {urls:"turn:global.relay.metered.ca:80?transport=tcp",username:c.username,credential:c.credential},
+ {urls:"turn:global.relay.metered.ca:443",username:c.username,credential:c.credential},
+ {urls:"turns:global.relay.metered.ca:443?transport=tcp",username:c.username,credential:c.credential});
+ }catch(e){say("TURN не завантажився. Пробуємо пряме з'єднання.");}
+ return ice;
+}
+function waitSocket(){return socket.connected?Promise.resolve():new Promise((resolve,reject)=>{const t=setTimeout(()=>reject(Error("Сервер не відповідає.")),12000);socket.once("connect",()=>{clearTimeout(t);resolve()})})}
+function roomFor(id){return "cam_"+id}
+async function join(r,who){
+ await waitSocket();currentRoom=r;role=who;
+ const result=await new Promise(resolve=>socket.timeout(10000).emit("join",{room:r,role:who,pin},(err,data)=>resolve(err?{ok:false,error:"Сервер не відповів."}:data)));
+ if(!result?.ok)throw Error(result?.error||"Не вдалося підключитися.");
+}
+function makePeer(){
+ pc=new RTCPeerConnection(window.rtcConfig);
+ pc.onicecandidate=e=>{if(e.candidate&&currentRoom)socket.emit("signal",{room:currentRoom,data:{candidate:e.candidate}})};
+ pc.ontrack=e=>{video.srcObject=e.streams[0];video.muted=false;video.play().then(()=>$("soundBtn").classList.add("hidden")).catch(()=>$("soundBtn").classList.remove("hidden"));say("Відео та звук отримано.");};
+ pc.onconnectionstatechange=()=>{if(pc?.connectionState==="failed")say("Не вдалося з'єднати телефони. Перевір інтернет і TURN.");};
+}
+async function startCamera(){
+ try{
+  if(!navigator.mediaDevices?.getUserMedia)throw Error("Відкрий сайт через HTTPS.");
+  say("Запитуємо доступ до камери та мікрофона…");
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing}},audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+  const id=localStorage.getItem(localDeviceKey)||crypto.randomUUID();localStorage.setItem(localDeviceKey,id);
+  const name=$("deviceName").value.trim()||"Телефон";
+  await api("/api/devices","POST",{id,name});
+  localStorage.setItem("cameraLinkDeviceName",name);
+  window.rtcConfig=await turnConfig();makePeer();
+  stream.getTracks().forEach(t=>{const s=pc.addTrack(t,stream);if(t.kind==="video")videoSender=s});
+  await join(roomFor(id),"sender");
+  video.srcObject=stream;video.muted=true;show(callCard);$("callTitle").textContent="Камера: "+name;$("switchBtn").classList.remove("hidden");
+  say("Камера та мікрофон увімкнені. Очікуємо підключення.");
+ }catch(e){say("Не вдалося запустити камеру: "+e.message);await stop(false)}
+}
+$("startCameraBtn").onclick=startCamera;
+async function startViewer(device){
+ try{
+  currentDevice=device;show(callCard);$("callTitle").textContent="Підключення до: "+device.name;say("Підключаємося до "+device.name+"…");
+  window.rtcConfig=await turnConfig();makePeer();await join(roomFor(device.id),"viewer");say("Очікуємо відео з "+device.name+"…");
+ }catch(e){say(e.message);await stop(false);show(listCard)}
+}
+$("soundBtn").onclick=async()=>{video.muted=false;try{await video.play();$("soundBtn").classList.add("hidden");say("Звук увімкнено.")}catch(e){say("Натисни ще раз, щоб дозволити звук.")}};
+$("switchBtn").onclick=async()=>{
+ if(role!=="sender"||!videoSender||!stream)return;
+ const next=facing==="environment"?"user":"environment";
+ try{const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:next}},audio:false});const track=s.getVideoTracks()[0];await videoSender.replaceTrack(track);stream.getVideoTracks().forEach(t=>{stream.removeTrack(t);t.stop()});stream.addTrack(track);facing=next;video.srcObject=stream;}
+ catch(e){say("Не вдалося перемкнути камеру: "+e.message)}
+};
+async function flush(){if(!pc?.remoteDescription)return;for(const c of pending.splice(0)){try{await pc.addIceCandidate(c)}catch(e){}}}
+socket.on("viewer-ready",async()=>{
+ if(role!=="sender"||!pc)return;
+ try{const offer=await pc.createOffer();await pc.setLocalDescription(offer);socket.emit("signal",{room:currentRoom,data:{description:pc.localDescription}});say("Запит на з'єднання надіслано.");}
+ catch(e){say("Помилка створення з'єднання: "+e.message)}
+});
+socket.on("signal",async data=>{
+ if(!pc||!data)return;
+ try{
+  if(data.description){await pc.setRemoteDescription(data.description);await flush();
+   if(data.description.type==="offer"){const answer=await pc.createAnswer();await pc.setLocalDescription(answer);socket.emit("signal",{room:currentRoom,data:{description:pc.localDescription}})}
   }
-
-  sendBtn.addEventListener("click", startSender);
-  viewBtn.addEventListener("click", startViewer);
-  soundBtn.addEventListener("click", async () => {
-    video.muted = false;
-    try { await video.play(); soundBtn.classList.add("hidden"); setStatus("Звук увімкнено."); }
-    catch (error) { setStatus("Не вдалося ввімкнути звук: " + error.message); }
-  });
-  switchBtn.addEventListener("click", switchCamera);
-  stopBtn.addEventListener("click", stop);
-
-  if (!window.isSecureContext) {
-    setStatus("Для доступу до камери відкрий сайт через HTTPS.");
-  } else if (/Android/i.test(navigator.userAgent)) {
-    // Android viewer attempts to join the fixed private room automatically.
-    const autoJoin = () => { if (!role && !starting) startViewer(); };
-    if (socket.connected) autoJoin(); else socket.once("connect", autoJoin);
-  } else if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-    setStatus("На iPhone натисни «Увімкнути камеру та мікрофон» і дозволь доступ.");
-  }
+  if(data.candidate){if(pc.remoteDescription)await pc.addIceCandidate(data.candidate);else pending.push(data.candidate)}
+ }catch(e){say("Помилка WebRTC: "+e.message)}
+});
+socket.on("peer-left",()=>say("Інший телефон від'єднався."));
+async function stop(showMain=true){
+ if(currentRoom)socket.emit("leave");
+ if(pc){pc.close();pc=null}
+ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+ video.srcObject=null;currentRoom=null;role=null;pending=[];videoSender=null;
+ $("switchBtn").classList.add("hidden");$("soundBtn").classList.add("hidden");
+ if(showMain)show(mainCard);
+ say("Від'єднано.");
+}
+$("stopBtn").onclick=()=>stop(true);
+if(!window.isSecureContext)say("Для камери відкрий сайт через HTTPS.");
 })();
 </script>
 </body>
